@@ -1,0 +1,42 @@
+# Default config for the Phase 4 ligand-GNN + ESM-pocket affinity model.
+# Hyperparameters are placeholders to be tuned in Phase 4.
+
+data:
+  data_root: data
+  val_frac: 0.1
+  seed: 42
+
+featurise:
+  pocket_radius_angstrom: 6.0
+  esm_model: esm2_t12_35M_UR50D
+  esm_layer: -1                     # which transformer layer to extract
+  esm_pool: mean                    # mean | max | attention
+
+ligand_gnn:
+  hidden_dim: 128
+  num_layers: 3
+  conv: GIN                         # GCN | GIN | GAT
+  dropout: 0.1
+  graph_pool: mean+sum
+
+head:
+  hidden_dim: 256
+  num_layers: 2
+  dropout: 0.2
+
+train:
+  batch_size: 64
+  epochs: 200
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  scheduler: cosine
+  warmup_epochs: 5
+  early_stop_patience: 25
+  early_stop_metric: val_pearson_r
+  loss: mse
+
+logging:
+  project: protein-ligand-binding
+  use_wandb: false
+  log_every_n_steps: 25
+  checkpoint_dir: checkpoints

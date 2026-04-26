@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plb"
+version = "0.1.0"
+description = "Protein-ligand binding affinity prediction (PDBbind / CASF-2016)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Fearghal" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "typer>=0.12",
+    "rich>=13.7",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.2",
+    "torch-geometric>=2.5",
+    "rdkit>=2024.3.1",
+    "fair-esm>=2.0.0",
+    "xgboost>=2.0",
+    "scikit-learn>=1.4",
+    "biopython>=1.83",
+]
+demo = [
+    "streamlit>=1.32",
+    "py3Dmol>=2.1",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+    "pre-commit>=3.7",
+    "ipykernel>=6.29",
+    "jupyter>=1.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+[project.scripts]
+plb = "plb.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "N", "W"]
+ignore = [
+    "E501", # long lines (formatter handles)
+    "N806", # uppercase var names (common in scientific code: X, Y)
+    "N803", # uppercase argument names
+    "N815", # mixedCase class attributes (scientific names: pK, pKa, pIC50)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/plb/cli.py" = ["B008"]      # typer.Option in defaults is the idiomatic pattern
+"tests/*" = ["B011"]
+"notebooks/*" = ["E402", "F401", "F811"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning:google.*",
+]
