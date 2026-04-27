@@ -23,7 +23,7 @@ CASF-2016 core set (n = 266, intersected with v2020 refined). CASF IDs are stric
 ## Quickstart
 
 ```powershell
-git clone https://github.com/Feargal/protein-ligand-binding.git
+git clone https://github.com/feargalosullivan/protein-ligand-binding.git
 cd protein-ligand-binding
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
