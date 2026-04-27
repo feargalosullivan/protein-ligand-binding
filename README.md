@@ -2,7 +2,7 @@
 
 Predict the binding affinity (pKd / pKi / pIC50) of a small molecule against a protein, trained on PDBbind v2020 and benchmarked on the CASF-2016 core set.
 
-> **Status:** scaffolding (Phase 1). Not yet usable end-to-end. See the [project plan](.cursor/plans/protein-ligand-binding-cv_22634dc4.plan.md) for the roadmap.
+> **Status:** Phases 1-2 complete (scaffold, splits, ligand graphs, pocket extraction, ESM-2 embedding). Not yet trained / deployed. See the [project plan](.cursor/plans/protein-ligand-binding-cv_22634dc4.plan.md) for the roadmap.
 
 ## Why this exists
 
@@ -80,7 +80,7 @@ reports/     # results write-up
 ## Roadmap
 
 - [x] Phase 1 - Repo scaffold, data download script, splits + tests, EDA
-- [ ] Phase 2 - Ligand graph featurisation, ESM-2 pocket embeddings (cached)
+- [x] Phase 2 - Ligand graph featurisation (RDKit), pocket extraction (Biopython), ESM-2 35M pocket embeddings + cache script
 - [ ] Phase 3 - Lightweight XGBoost baseline notebook (~80 lines)
 - [ ] Phase 4 - GNN + ESM-pool + MLP, CASF-2016 evaluation, comparison to baseline
 - [ ] Phase 5 - HF Hub model card, Streamlit demo on HF Spaces, finalise README
