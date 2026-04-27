@@ -2,7 +2,7 @@
 
 Predict the binding affinity (pKd / pKi / pIC50) of a small molecule against a protein, trained on PDBbind v2020 and benchmarked on the CASF-2016 core set.
 
-> **Status:** Phases 1-3 complete. Classical baseline (ECFP + ESM-pool + XGBoost) hits Pearson R = 0.72, RMSE = 1.51 on CASF-2016. Deep model (Phase 4) and live demo (Phase 5) coming next.
+> **Status:** Phases 1-4 complete. Phase 4 GIN + ESM-pool + MLP hits Pearson R = 0.76, RMSE = 1.50 on CASF-2016, beating the classical XGBoost baseline (R = 0.72, RMSE = 1.51) across every metric. Live demo (Phase 5) coming next.
 
 ## Why this exists
 
@@ -21,14 +21,17 @@ CASF-2016 PDB IDs are strictly excluded from train and val.
 
 | Model                                | Pearson R | Spearman R | RMSE  | MAE   |
 | ------------------------------------ | --------- | ---------- | ----- | ----- |
-| ECFP + ESM-2 35M pool + XGBoost      | **0.719** | 0.687      | 1.514 | 1.184 |
-| Ligand-GIN + ESM-2 35M pool + MLP    | TBD       | TBD        | TBD   | TBD   |
+| ECFP + ESM-2 35M pool + XGBoost      | 0.719     | 0.687      | 1.514 | 1.184 |
+| Ligand-GIN + ESM-2 35M pool + MLP    | **0.761** | **0.736**  | **1.496** | **1.168** |
 | Pafnucy (Stepniewska-Dziubinska)*    | 0.78      | -          | 1.42  | -     |
 | DeepDTA (Ozturk et al. 2018)*        | 0.66      | -          | 1.59  | -     |
 
 \* Reported on the CASF-2016 standard core set (n = 285), so not directly comparable; included for context.
 
+The deep model lifts Pearson R by +0.042 and Spearman R by +0.049 over the baseline while cutting RMSE — a clean signal that the learned ligand encoder extracts information that 2048-bit ECFP4 fingerprints can't.
+
 ![Baseline scatter](reports/baseline_casf2016_scatter.png)
+![GNN scatter](reports/gnn_casf2016_scatter.png)
 
 ## Quickstart
 
@@ -70,15 +73,18 @@ See [scripts/download_pdbbind.py](scripts/download_pdbbind.py) for the exact fil
 
 ```
 src/plb/
-  data/      # PDBbind parsing, train/val/test splits, featurisation
-  models/    # GNN model definitions
+  data/      # PDBbind parsing, train/val/test splits, ligand + ESM featurisation, PyG dataset
+  models/    # GIN ligand encoder + AffinityModel
+  train.py   # AdamW + ReduceLROnPlateau + early-stop training loop
+  eval.py    # CASF-2016 scoring-power metrics
   cli.py     # `plb` command-line entry point
 configs/     # YAML run configs
-notebooks/   # EDA + the lightweight XGBoost baseline notebook
-scripts/     # one-off scripts (data download, ESM precomputation, etc.)
-tests/       # pytest unit tests
+notebooks/   # EDA, featurisation sanity checks, XGBoost baseline, GNN sweep
+scripts/     # one-off scripts (data download, ESM + ligand-graph precomputation)
+tests/       # pytest unit tests (65 tests)
 app/         # Streamlit demo (Phase 5)
-reports/     # results write-up
+reports/     # scatter plots, results write-up
+runs/        # per-run training artefacts (config, log, best.pt, metrics)
 ```
 
 ## Roadmap
@@ -86,7 +92,7 @@ reports/     # results write-up
 - [x] Phase 1 - Repo scaffold, data download script, splits + tests, EDA
 - [x] Phase 2 - Ligand graph featurisation (RDKit), pocket extraction (Biopython), ESM-2 35M pocket embeddings + cache script
 - [x] Phase 3 - ECFP4 + ESM-pool + XGBoost baseline ([notebook](notebooks/03_baseline_xgboost.ipynb)): R = 0.72, RMSE = 1.51 on CASF-2016
-- [ ] Phase 4 - GNN + ESM-pool + MLP, CASF-2016 evaluation, comparison to baseline
+- [x] Phase 4 - Ligand-GIN + ESM-pool + MLP ([notebook](notebooks/04_gnn_training.ipynb)): R = 0.76, RMSE = 1.50 on CASF-2016
 - [ ] Phase 5 - HF Hub model card, Streamlit demo on HF Spaces, finalise README
 - [ ] Phase 6 (stretch) - scaffold split, target-based split, 3D pocket SchNet, ensembling
 
