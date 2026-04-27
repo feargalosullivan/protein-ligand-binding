@@ -239,3 +239,30 @@ def ecfp_fingerprint(
     arr = np.zeros((n_bits,), dtype=np.uint8)
     ConvertToNumpyArray(fp, arr)
     return arr
+
+
+def ecfp_from_sdf(
+    sdf_path: Path | str,
+    radius: int = 2,
+    n_bits: int = 2048,
+) -> np.ndarray:
+    """Load a single-molecule SDF and return its ECFP4 fingerprint.
+
+    Tries strict sanitisation first; falls back to ``sanitize=False`` if that
+    fails, so PDBbind ligands with non-standard valences still produce a
+    fingerprint (the Morgan generator just walks the bond graph and tolerates
+    that).
+    """
+    from rdkit import Chem
+
+    sdf_path = Path(sdf_path)
+    if not sdf_path.is_file():
+        raise FileNotFoundError(sdf_path)
+
+    for sanitize in (True, False):
+        suppl = Chem.SDMolSupplier(str(sdf_path), sanitize=sanitize, removeHs=True)
+        mol = next((m for m in suppl if m is not None), None)
+        if mol is not None:
+            return ecfp_fingerprint(mol, radius=radius, n_bits=n_bits)
+
+    raise ValueError(f"no valid molecule in {sdf_path}")

@@ -2,7 +2,7 @@
 
 Predict the binding affinity (pKd / pKi / pIC50) of a small molecule against a protein, trained on PDBbind v2020 and benchmarked on the CASF-2016 core set.
 
-> **Status:** Phases 1-2 complete (scaffold, splits, ligand graphs, pocket extraction, ESM-2 embedding). Not yet trained / deployed. See the [project plan](.cursor/plans/protein-ligand-binding-cv_22634dc4.plan.md) for the roadmap.
+> **Status:** Phases 1-3 complete. Classical baseline (ECFP + ESM-pool + XGBoost) hits Pearson R = 0.72, RMSE = 1.51 on CASF-2016. Deep model (Phase 4) and live demo (Phase 5) coming next.
 
 ## Why this exists
 
@@ -14,17 +14,21 @@ The deliverables are three CV-facing links:
 - **Model weights** — Hugging Face Hub (TBD)
 - **Live demo** — Hugging Face Spaces (TBD)
 
-## Headline result (placeholder, to be filled in)
+## Headline result
 
-| Model                              | Pearson R | Spearman R | RMSE | MAE  |
-| ---------------------------------- | --------- | ---------- | ---- | ---- |
-| Random predictor                   | 0.00      | 0.00       | -    | -    |
-| ECFP + ESM-pool + XGBoost (ours)   | TBD       | TBD        | TBD  | TBD  |
-| Ligand-GNN + ESM-pool + MLP (ours) | TBD       | TBD        | TBD  | TBD  |
-| GraphDTA (Nguyen et al. 2021)      | 0.78      | -          | -    | -    |
-| Pafnucy (Stepniewska-Dziubinska)   | 0.78      | -          | -    | -    |
+CASF-2016 core set (n = 266 of the 285 declared, intersected with the v2020 refined set).
+CASF-2016 PDB IDs are strictly excluded from train and val.
 
-All "ours" rows reported on the CASF-2016 core set with CASF-2016 PDB IDs strictly excluded from the training set.
+| Model                                | Pearson R | Spearman R | RMSE  | MAE   |
+| ------------------------------------ | --------- | ---------- | ----- | ----- |
+| ECFP + ESM-2 35M pool + XGBoost      | **0.719** | 0.687      | 1.514 | 1.184 |
+| Ligand-GIN + ESM-2 35M pool + MLP    | TBD       | TBD        | TBD   | TBD   |
+| Pafnucy (Stepniewska-Dziubinska)*    | 0.78      | -          | 1.42  | -     |
+| DeepDTA (Ozturk et al. 2018)*        | 0.66      | -          | 1.59  | -     |
+
+\* Reported on the CASF-2016 standard core set (n = 285), so not directly comparable; included for context.
+
+![Baseline scatter](reports/baseline_casf2016_scatter.png)
 
 ## Quickstart
 
@@ -81,7 +85,7 @@ reports/     # results write-up
 
 - [x] Phase 1 - Repo scaffold, data download script, splits + tests, EDA
 - [x] Phase 2 - Ligand graph featurisation (RDKit), pocket extraction (Biopython), ESM-2 35M pocket embeddings + cache script
-- [ ] Phase 3 - Lightweight XGBoost baseline notebook (~80 lines)
+- [x] Phase 3 - ECFP4 + ESM-pool + XGBoost baseline ([notebook](notebooks/03_baseline_xgboost.ipynb)): R = 0.72, RMSE = 1.51 on CASF-2016
 - [ ] Phase 4 - GNN + ESM-pool + MLP, CASF-2016 evaluation, comparison to baseline
 - [ ] Phase 5 - HF Hub model card, Streamlit demo on HF Spaces, finalise README
 - [ ] Phase 6 (stretch) - scaffold split, target-based split, 3D pocket SchNet, ensembling

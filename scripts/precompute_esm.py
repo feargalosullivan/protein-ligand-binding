@@ -38,6 +38,16 @@ from plb.data.pdbbind import find_default_paths
 from plb.data.pocket import pocket_from_pdb_files
 from plb.data.protein import DEFAULT_MODEL, ESMEmbedder, embed_dim_for, pool_pocket_embedding
 
+# PDBbind ligand SDFs frequently set the "2D" flag in their header but ship 3D
+# conformers, which makes RDKit emit a warning per file. We trust PDBbind's
+# coordinates either way, so suppress to avoid 5316 lines of noise.
+try:
+    from rdkit import RDLogger
+
+    RDLogger.DisableLog("rdApp.warning")
+except ImportError:
+    pass
+
 log = logging.getLogger("precompute_esm")
 
 

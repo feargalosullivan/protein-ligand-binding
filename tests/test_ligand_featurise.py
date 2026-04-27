@@ -14,6 +14,7 @@ rdkit = pytest.importorskip("rdkit")  # noqa: F841 - just gating the module
 from plb.data.ligand import (  # noqa: E402 - after importorskip
     LigandGraph,
     ecfp_fingerprint,
+    ecfp_from_sdf,
     feature_dims,
     ligand_graph_from_mol,
     ligand_graph_from_smiles,
@@ -130,3 +131,32 @@ def test_ligand_graph_dataclass_properties() -> None:
     assert isinstance(g, LigandGraph)
     assert g.num_atoms == g.node_feats.shape[0]
     assert g.num_edges == g.edge_index.shape[1]
+
+
+def test_ecfp_from_sdf_matches_smiles_fingerprint(tmp_path) -> None:
+    """ECFP read from a written SDF should match the SMILES-based fingerprint.
+
+    Identical molecules with identical canonical structure must produce
+    identical ECFP4 bit vectors regardless of the input format.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    mol = Chem.MolFromSmiles(ASPIRIN_SMILES)
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol, randomSeed=0xBEEF)
+    mol = Chem.RemoveHs(mol)
+
+    sdf_path = tmp_path / "aspirin.sdf"
+    writer = Chem.SDWriter(str(sdf_path))
+    writer.write(mol)
+    writer.close()
+
+    from_sdf = ecfp_from_sdf(sdf_path)
+    from_smiles = ecfp_fingerprint(ASPIRIN_SMILES)
+    np.testing.assert_array_equal(from_sdf, from_smiles)
+
+
+def test_ecfp_from_sdf_missing_file(tmp_path) -> None:
+    with pytest.raises(FileNotFoundError):
+        ecfp_from_sdf(tmp_path / "does_not_exist.sdf")
