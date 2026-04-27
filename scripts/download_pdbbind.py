@@ -1,25 +1,4 @@
-"""Verify and extract PDBbind v2020 refined + CASF-2016 archives.
-
-PDBbind requires registration; we can't download for you. This script's job
-is to (1) tell you exactly what to download and where to put it, (2) extract
-the archives once you've placed them in ``data/raw/``, and (3) sanity-check
-the result.
-
-Usage::
-
-    python scripts/download_pdbbind.py
-    python scripts/download_pdbbind.py --data-root D:/datasets/plb
-
-Expected files in ``<data-root>/raw/`` (filenames as PDBbind ships them):
-
-    PDBbind_v2020_refined.tar.gz      # ~4 GB
-    CASF-2016.tar.gz                  # ~600 MB
-
-After extraction the layout is::
-
-    <data-root>/raw/PDBbind_v2020_refined/refined-set/<pdb_id>/...
-    <data-root>/raw/CASF-2016/power_scoring/CoreSet.dat
-"""
+"""Extract PDBbind v2020 refined + CASF-2016 archives into data/raw/."""
 
 from __future__ import annotations
 

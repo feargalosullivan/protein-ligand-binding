@@ -1,15 +1,4 @@
-"""Train / validation / test splits for PDBbind.
-
-The test set is **always** the CASF-2016 core set. CASF-2016 PDB IDs are a
-subset of the PDBbind refined set, so we strictly remove them from train/val.
-Without this, the CASF-2016 numbers would be inflated by training-set leakage,
-which is one of the most common pitfalls in published binding-affinity papers.
-
-The split function is intentionally a pure function over PDB-ID lists so it
-can be unit-tested without any of the actual PDBbind data being present.
-"""
-
-from __future__ import annotations
+"""Train / val / test splits with CASF-2016 as a held-out test set."""
 
 import random
 from collections.abc import Iterable
@@ -18,12 +7,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Split:
-    """A train / val / test partition of PDBbind PDB IDs.
-
-    All three lists are sorted alphabetically for determinism. Every entry in
-    ``test`` is guaranteed to also appear in the input refined-set list AND in
-    the input CASF set (i.e. ``test == sorted(refined & casf)``).
-    """
 
     train: list[str]
     val: list[str]
@@ -57,28 +40,6 @@ def make_splits(
     val_frac: float = 0.1,
     seed: int = 42,
 ) -> Split:
-    """Build a train/val/test split.
-
-    Parameters
-    ----------
-    refined_pdbids
-        All PDB IDs in the PDBbind refined set (lower-case 4-character codes).
-    casf_pdbids
-        PDB IDs in the CASF-2016 core set. Any IDs not present in
-        ``refined_pdbids`` are silently dropped (they cannot be in the test
-        set if we don't have their structures).
-    val_frac
-        Fraction of the *non-CASF* refined set to use as validation.
-        Must be in (0, 1).
-    seed
-        RNG seed for the train/val split. The test set is fully determined by
-        ``casf_pdbids`` and does not depend on ``seed``.
-
-    Returns
-    -------
-    A :class:`Split` whose ``test`` set equals the intersection of the refined
-    set and ``casf_pdbids``, with train/val drawn from the remainder.
-    """
     if not 0.0 < val_frac < 1.0:
         raise ValueError(f"val_frac must be in (0, 1); got {val_frac}")
 

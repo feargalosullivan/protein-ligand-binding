@@ -1,6 +1,4 @@
-"""``plb`` command-line interface (Typer)."""
-
-from __future__ import annotations
+"""CLI entry point for the plb package."""
 
 import json
 from pathlib import Path
@@ -37,7 +35,7 @@ def data_prepare(
     val_frac: float = typer.Option(0.1, help="Fraction of non-CASF refined set used as val."),
     seed: int = typer.Option(42, help="RNG seed for the train/val split."),
 ) -> None:
-    """Parse PDBbind index, build train/val/test split, write to data/processed/."""
+    """Parse PDBbind index and write train/val/test split to data/processed/."""
     paths = find_default_paths(data_root)
     refined_df = load_refined_index(paths["refined_index"])
     casf_ids = load_casf2016_coreset_ids(paths["casf_coreset"])

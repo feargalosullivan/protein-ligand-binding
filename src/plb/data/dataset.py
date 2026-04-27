@@ -1,25 +1,4 @@
-"""PyG dataset that stitches LigandGraphs + cached ESM embeddings + pK labels.
-
-Phase 4 entry point. Each sample is a ``torch_geometric.data.Data`` carrying:
-
-* ``x``           : ``(n_atoms, 36)`` atom features
-* ``edge_index``  : ``(2, n_edges)``
-* ``edge_attr``   : ``(n_edges, 8)`` bond features
-* ``esm_pocket``  : ``(1, 480)`` cached pocket-pool embedding
-* ``esm_whole``   : ``(1, 480)`` cached whole-protein-pool embedding
-* ``y``           : ``(1,)`` pK label
-* ``pdb_id``      : str
-
-ESM features are stored as ``(1, D)`` so that PyG's default
-``Batch.from_data_list`` concatenates along dim 0 to produce ``(B, D)``
-graph-level tensors, which is exactly what ``AffinityModel`` consumes.
-
-Ligand graphs are loaded from a single on-disk cache produced by
-``scripts/precompute_ligand_graphs.py``; if the cache is missing the dataset
-will parse SDFs on the fly with ``ligand_graph_from_sdf``.
-"""
-
-from __future__ import annotations
+"""PyG dataset: ligand graphs + cached ESM embeddings + pK labels."""
 
 import logging
 from collections.abc import Iterable, Mapping
@@ -39,16 +18,10 @@ LIGAND_CACHE_RELPATH = "cache/ligand_graphs.pt"
 
 
 def ligand_cache_path(data_root: Path | str) -> Path:
-    """Canonical path of the ligand-graph cache file."""
     return Path(data_root) / LIGAND_CACHE_RELPATH
 
 
 def _ligand_dict_from_sdf(sdf_path: Path) -> dict[str, torch.Tensor | str]:
-    """Parse one SDF and return a torch-friendly dict.
-
-    Falls back to ``sanitize=False`` if strict parsing fails so PDBbind ligands
-    with unusual valences still load (mirrors :func:`plb.data.ligand.ecfp_from_sdf`).
-    """
     try:
         graph = ligand_graph_from_sdf(sdf_path, sanitize=True)
     except Exception:
@@ -62,12 +35,10 @@ def _ligand_dict_from_sdf(sdf_path: Path) -> dict[str, torch.Tensor | str]:
 
 
 def _refined_sdf_path(refined_dir: Path, pdb_id: str) -> Path:
-    """Path to ``<refined_dir>/<pdb_id>/<pdb_id>_ligand.sdf``."""
     return refined_dir / pdb_id / f"{pdb_id}_ligand.sdf"
 
 
 def load_ligand_graph_cache(data_root: Path | str) -> dict[str, dict]:
-    """Load the precomputed ligand-graph cache dict (or return empty if missing)."""
     path = ligand_cache_path(data_root)
     if not path.is_file():
         return {}
@@ -84,7 +55,6 @@ def build_data_object(
     esm_whole: np.ndarray,
     pK: float,
 ) -> Data:
-    """Build one PyG ``Data`` sample from preloaded ligand + ESM tensors."""
     return Data(
         x=ligand["x"],
         edge_index=ligand["edge_index"],
@@ -97,26 +67,6 @@ def build_data_object(
 
 
 class PDBbindGraphDataset(torch.utils.data.Dataset):
-    """In-memory PyG dataset of (ligand graph + ESM features + pK) tuples.
-
-    Parameters
-    ----------
-    pdb_ids
-        Iterable of PDB IDs to include (already filtered to a split).
-    labels
-        Mapping ``{pdb_id: pK}`` covering every ID in ``pdb_ids``.
-    data_root
-        Project ``data/`` directory. Used to locate the ESM cache.
-    refined_dir
-        Path to the unpacked PDBbind refined set (one subdir per PDB ID).
-        Only used as a fallback when the ligand-graph cache is missing or
-        incomplete.
-    esm_model
-        ESM-2 model name; must match what was used by ``precompute_esm.py``.
-    ligand_cache
-        Optional pre-loaded ligand-graph cache dict (saves re-reading the
-        ``.pt`` file when constructing multiple splits).
-    """
 
     def __init__(
         self,
@@ -200,7 +150,6 @@ def make_dataloader(
     shuffle: bool,
     num_workers: int = 0,
 ) -> DataLoader:
-    """Thin wrapper around ``torch_geometric.loader.DataLoader`` with our defaults."""
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -208,13 +157,3 @@ def make_dataloader(
         num_workers=num_workers,
         pin_memory=torch.cuda.is_available(),
     )
-
-
-__all__ = [
-    "LIGAND_CACHE_RELPATH",
-    "PDBbindGraphDataset",
-    "build_data_object",
-    "ligand_cache_path",
-    "load_ligand_graph_cache",
-    "make_dataloader",
-]

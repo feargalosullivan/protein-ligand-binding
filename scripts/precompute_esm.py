@@ -1,27 +1,4 @@
-"""Pre-compute ESM-2 pocket-pooled embeddings for every PDBbind complex.
-
-For each ``{pdb_id}_protein.pdb`` + ``{pdb_id}_ligand.sdf`` pair under
-``data/raw/PDBbind_v2020_refined/refined-set/``:
-
-1. Identify pocket residues within ``--cutoff`` angstroms of the ligand.
-2. Run ESM-2 on each chain and assemble per-residue embeddings.
-3. Mean-pool over (a) pocket residues across chains and (b) the whole protein.
-4. Save ``data/cache/esm/{pdb_id}.npz`` with keys::
-
-       pocket : (D,) float32 - mean over pocket residues
-       whole  : (D,) float32 - mean over the whole protein
-       n_pocket : int        - number of pocket residues found
-       n_total  : int        - total number of standard residues
-       cutoff   : float
-
-Existing cache files are skipped, so the script is safely resumable.
-
-Usage::
-
-    python scripts/precompute_esm.py
-    python scripts/precompute_esm.py --device cuda --model esm2_t12_35M_UR50D
-    python scripts/precompute_esm.py --limit 50  # quick smoke test
-"""
+"""Pre-compute ESM-2 pocket + whole-protein embeddings for every PDBbind complex."""
 
 from __future__ import annotations
 

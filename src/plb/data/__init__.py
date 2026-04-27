@@ -1,4 +1,4 @@
-"""Data loading, splitting, and featurisation utilities."""
+"""Data loading, featurisation, and splitting."""
 
 from plb.data.cache import (
     DEFAULT_ESM_MODEL,

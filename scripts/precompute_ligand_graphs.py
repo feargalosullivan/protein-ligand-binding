@@ -1,16 +1,4 @@
-"""Pre-compute ligand graphs for every PDBbind complex into a single ``.pt`` file.
-
-The Phase 4 GNN re-parses the same ~5000 SDF files every training run unless
-we cache them. This script reads each ``{pdb_id}_ligand.sdf`` once with
-RDKit, converts to a torch-friendly dict, and saves the result to
-``data/cache/ligand_graphs.pt`` (a flat ``{pdb_id: dict}`` mapping).
-
-Usage::
-
-    python scripts/precompute_ligand_graphs.py
-    python scripts/precompute_ligand_graphs.py --limit 50  # smoke test
-    python scripts/precompute_ligand_graphs.py --overwrite
-"""
+"""Pre-compute ligand graphs for every PDBbind complex into a single .pt cache."""
 
 from __future__ import annotations
 

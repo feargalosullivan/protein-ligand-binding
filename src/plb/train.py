@@ -1,22 +1,4 @@
-"""GNN training loop for the Phase 4 affinity model.
-
-The public surface is :func:`train`, which takes a :class:`TrainConfig` plus
-the train / val / test datasets and returns a summary dict with paths to the
-saved best checkpoint, full per-epoch log, and final test metrics. The
-notebook drives a small sweep by calling :func:`train` once per config.
-
-Design notes
-------------
-* MSE loss in pK units (matches the baseline; PDBbind labels are in pK).
-* Early stopping uses **val Pearson R** rather than val loss so we optimise
-  the same statistic that CASF-2016 reports.
-* AMP is supported via ``cfg.amp`` but defaults to off because the model is
-  small enough that fp32 is faster on consumer GPUs.
-* Reproducibility: we set torch / numpy / python seeds and cast the cuDNN
-  benchmark flag based on ``cfg.deterministic``.
-"""
-
-from __future__ import annotations
+"""GNN training loop: AdamW + ReduceLROnPlateau + early stopping on val Pearson R."""
 
 import json
 import logging
@@ -39,36 +21,6 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class TrainConfig:
-    """All hyperparameters for one training run.
-
-    Attributes
-    ----------
-    model
-        Architecture hyperparameters (see :class:`GNNConfig`).
-    batch_size, max_epochs, learning_rate, weight_decay
-        Standard optimisation knobs.
-    scheduler_factor, scheduler_patience
-        ``ReduceLROnPlateau`` parameters (monitored on val Pearson R, in
-        ``max`` mode).
-    early_stop_patience
-        Stop after this many epochs without improving val Pearson R.
-    seed
-        For numpy / torch / random.
-    device
-        ``"cuda"`` or ``"cpu"``; ``"auto"`` resolves to cuda if available.
-    amp
-        Use ``torch.amp`` mixed precision on cuda. Off by default.
-    deterministic
-        If ``True`` disable cuDNN benchmark and set the deterministic flag,
-        at the cost of some throughput.
-    num_workers
-        DataLoader workers. ``0`` is fine and avoids Windows multiprocessing
-        spawn issues.
-    name
-        Run name (used as the subdirectory under ``runs/gnn/``).
-    notes
-        Free-form description for the saved config; not used by training.
-    """
 
     model: GNNConfig = field(default_factory=GNNConfig)
     batch_size: int = 64
@@ -110,7 +62,6 @@ def train_one_epoch(
     device: torch.device,
     scaler: torch.amp.GradScaler | None = None,
 ) -> dict[str, float]:
-    """One pass over the training set; returns ``{loss}`` averaged over samples."""
     model.train()
     loss_fn = torch.nn.MSELoss(reduction="sum")
     total_loss, n_samples = 0.0, 0
@@ -158,7 +109,6 @@ def evaluate(
     loader,
     device: torch.device,
 ) -> dict[str, object]:
-    """Return ``{metrics, y_true, y_pred, pdb_ids}`` for an eval split."""
     model.eval()
     y_true_chunks: list[np.ndarray] = []
     y_pred_chunks: list[np.ndarray] = []
@@ -176,7 +126,6 @@ def evaluate(
         )
         y_true_chunks.append(batch.y.detach().cpu().numpy())
         y_pred_chunks.append(pred.detach().cpu().numpy())
-        # ``pdb_id`` survives batching as a list when set on individual Data objects.
         ids = batch.pdb_id
         if isinstance(ids, str):
             pdb_ids.append(ids)
@@ -202,15 +151,6 @@ def train(
     test_ds: PDBbindGraphDataset | None = None,
     run_dir: Path | str = Path("runs") / "gnn",
 ) -> dict[str, object]:
-    """Run a full training session and return a summary dict.
-
-    Side effects (all under ``<run_dir>/<cfg.name>/``):
-
-    * ``config.json`` - serialised :class:`TrainConfig`.
-    * ``log.jsonl``   - one line per epoch with train/val metrics.
-    * ``best.pt``     - state dict of the model with the highest val Pearson R.
-    * ``test_predictions.npz`` (if ``test_ds`` is given) - per-sample preds.
-    """
     run_root = Path(run_dir) / cfg.name
     run_root.mkdir(parents=True, exist_ok=True)
     _save_run_config(cfg, run_root / "config.json")
@@ -231,6 +171,7 @@ def train(
     model = AffinityModel(cfg.model).to(device)
     log.info("model parameters: %d", model.n_parameters())
 
+    # TODO: try cosine annealing - plateau scheduler is finicky with small val sets
     optimizer = AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     scheduler = ReduceLROnPlateau(
         optimizer,
@@ -346,6 +287,3 @@ def train(
         log.info("CASF-2016 test  | %s", format_metrics_row(test_eval["metrics"]))
 
     return summary
-
-
-__all__ = ["TrainConfig", "evaluate", "train", "train_one_epoch"]

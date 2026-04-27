@@ -1,28 +1,4 @@
-"""Ligand-GNN + ESM-pocket + MLP affinity predictor.
-
-The model is intentionally small: a 3-layer GINE encoder over the ligand
-graph, a 2-layer MLP over the cached ESM pocket / whole-protein embeddings,
-and a linear head fusing the two. Total parameter count is in the few
-hundred thousand range so it fits comfortably on a 6 GB GPU and trains in a
-few minutes.
-
-Architecture (default hyperparameters):
-
-  Ligand graph (node feats 36, edge feats 8)
-      -> Linear(36 -> H) ; Linear(8 -> H)
-      -> GINEConv x N (each MLP: H -> H -> H, with BN + ReLU + dropout)
-      -> Global mean-pool ++ max-pool          -> 2H
-      -> Linear(2H -> H)                       -> H
-                                                       \\
-  ESM pocket (480) ++ ESM whole (480) -> 960            \\
-      -> Linear(960 -> 2H) -> ReLU -> Dropout            >--> [H | H] -> 2H
-      -> Linear(2H -> H)                       -> H     /
-                                                       /
-                                  Linear(2H -> H) -> ReLU -> Dropout
-                                  Linear(H -> 1) -> pK
-"""
-
-from __future__ import annotations
+"""Ligand-GNN + ESM-pocket + MLP affinity predictor."""
 
 from dataclasses import dataclass
 
@@ -33,11 +9,6 @@ from torch_geometric.nn import GINEConv, global_max_pool, global_mean_pool
 
 @dataclass(frozen=True)
 class GNNConfig:
-    """Hyperparameters for ``AffinityModel``.
-
-    Defaults are the "config A" we sweep first; the notebook overrides
-    ``hidden_dim`` / ``n_gnn_layers`` / ``dropout`` for the other configs.
-    """
 
     node_dim: int = 36
     edge_dim: int = 8
@@ -49,11 +20,6 @@ class GNNConfig:
 
 
 def _gine_block(hidden: int, dropout: float) -> GINEConv:
-    """One GINE message-passing layer with BN + ReLU + dropout in its MLP.
-
-    GINEConv learns ``h_v' = MLP((1 + eps) * h_v + sum_{u in N(v)} ReLU(h_u + e_uv))``,
-    so its update MLP needs to map ``hidden -> hidden``.
-    """
     mlp = nn.Sequential(
         nn.Linear(hidden, hidden),
         nn.BatchNorm1d(hidden),
@@ -65,10 +31,7 @@ def _gine_block(hidden: int, dropout: float) -> GINEConv:
 
 
 class GINEncoder(nn.Module):
-    """Stack of GINE convolutions followed by global mean+max pooling.
-
-    Returns a fixed-size graph embedding of shape ``(batch_size, 2 * hidden_dim)``.
-    """
+    """GINE convolution stack -> global mean+max pool -> (batch, 2*hidden_dim)."""
 
     def __init__(
         self, node_dim: int, edge_dim: int, hidden_dim: int, n_layers: int, dropout: float
@@ -97,11 +60,11 @@ class GINEncoder(nn.Module):
             h = bn(h)
             h = torch.relu(h)
             h = self.dropout(h)
+        # TODO: try attention pooling (set2set or similar) instead of mean+max
         return torch.cat([global_mean_pool(h, batch), global_max_pool(h, batch)], dim=1)
 
 
 class _MLP(nn.Module):
-    """``Linear -> ReLU -> Dropout -> Linear`` block."""
 
     def __init__(self, in_dim: int, hidden_dim: int, out_dim: int, dropout: float) -> None:
         super().__init__()
@@ -156,29 +119,10 @@ class AffinityModel(nn.Module):
         esm_pocket: torch.Tensor,
         esm_whole: torch.Tensor,
     ) -> torch.Tensor:
-        """Predict pK for a batch.
-
-        Parameters
-        ----------
-        x, edge_index, edge_attr, batch
-            Standard PyG mini-batch graph attributes.
-        esm_pocket
-            ``(B, esm_pocket_dim)`` cached pocket-pool embedding.
-        esm_whole
-            ``(B, esm_whole_dim)`` cached whole-protein-pool embedding.
-
-        Returns
-        -------
-        ``(B,)`` predicted pK values.
-        """
         ligand = self.ligand_proj(self.ligand_encoder(x, edge_index, edge_attr, batch))
         protein = self.protein_mlp(torch.cat([esm_pocket, esm_whole], dim=1))
         return self.head(torch.cat([ligand, protein], dim=1)).squeeze(-1)
 
     @torch.no_grad()
     def n_parameters(self) -> int:
-        """Convenience: count of trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-__all__ = ["AffinityModel", "GINEncoder", "GNNConfig"]

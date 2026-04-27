@@ -1,16 +1,4 @@
-"""Loader for the ESM embedding npz cache produced by scripts/precompute_esm.py.
-
-The cache lives at::
-
-    data/cache/esm/{model_name}/{pdb_id}.npz
-
-and each file holds the keys ``pocket``, ``whole``, ``n_pocket``, ``n_total``,
-``cutoff`` (see ``scripts/precompute_esm.py`` for the schema). This module just
-provides convenient typed accessors and a vectorised loader that stacks many
-complexes into a single matrix (handy for building XGBoost feature tables).
-"""
-
-from __future__ import annotations
+"""Loader for precomputed ESM embedding .npz caches."""
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -23,7 +11,6 @@ DEFAULT_ESM_MODEL = "esm2_t12_35M_UR50D"
 
 @dataclass(frozen=True)
 class CachedEmbedding:
-    """Single complex's pocket + whole-protein ESM embeddings."""
 
     pdb_id: str
     pocket: np.ndarray  # (D,) float32
@@ -38,7 +25,6 @@ class CachedEmbedding:
 
 
 def esm_cache_dir(data_root: Path | str, model_name: str = DEFAULT_ESM_MODEL) -> Path:
-    """Canonical path of the ESM cache directory for a given model."""
     return Path(data_root) / "cache" / "esm" / model_name
 
 
@@ -65,7 +51,6 @@ def load_esm_embedding(
     data_root: Path | str = "data",
     model_name: str = DEFAULT_ESM_MODEL,
 ) -> CachedEmbedding:
-    """Load the cached pocket + whole-protein embedding for a single complex."""
     return _load_one(esm_cache_dir(data_root, model_name), pdb_id)
 
 
@@ -76,30 +61,7 @@ def load_esm_embedding_matrix(
     columns: Sequence[str] = ("pocket", "whole"),
     skip_missing: bool = False,
 ) -> tuple[np.ndarray, list[str]]:
-    """Stack many cached embeddings into a single ``(N, D_total)`` feature matrix.
-
-    Parameters
-    ----------
-    pdb_ids
-        PDB IDs to load (in input order).
-    data_root, model_name
-        Used to find the cache directory; see ``esm_cache_dir``.
-    columns
-        Subset of ``("pocket", "whole")`` to concatenate per row. Order is
-        preserved in the output. Default is both, giving a ``(N, 2D)`` matrix.
-    skip_missing
-        If ``True``, silently drop PDB IDs without a cache file. If ``False``
-        (default), raise ``FileNotFoundError`` on the first miss.
-
-    Returns
-    -------
-    X
-        ``(N, D_total)`` float32 array. ``D_total`` is ``D * len(columns)``
-        where ``D`` is the model's per-residue embedding dim.
-    kept_ids
-        The subset of ``pdb_ids`` that were actually loaded (equal to
-        ``pdb_ids`` unless ``skip_missing=True`` and some were absent).
-    """
+    """Stack cached embeddings into a single (N, D_total) feature matrix."""
     if not columns:
         raise ValueError("columns must be non-empty")
     valid = {"pocket", "whole"}
@@ -129,12 +91,3 @@ def load_esm_embedding_matrix(
         raise ValueError("no embeddings loaded (empty input or all missing)")
 
     return np.stack(rows, axis=0).astype(np.float32, copy=False), kept
-
-
-__all__ = [
-    "DEFAULT_ESM_MODEL",
-    "CachedEmbedding",
-    "esm_cache_dir",
-    "load_esm_embedding",
-    "load_esm_embedding_matrix",
-]

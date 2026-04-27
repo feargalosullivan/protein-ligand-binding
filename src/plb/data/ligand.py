@@ -1,21 +1,10 @@
-"""Ligand featurisation: 2D molecular graphs and ECFP fingerprints from RDKit.
-
-We deliberately produce a framework-agnostic :class:`LigandGraph` (numpy arrays)
-rather than a ``torch_geometric.data.Data`` directly, so that:
-
-* the baseline notebook (Phase 3) can use this module without importing torch;
-* unit tests can run on pure numpy + RDKit;
-* a thin ``to_pyg_data`` adapter handles the GNN side in Phase 4.
-"""
-
-from __future__ import annotations
+"""Ligand featurisation: 2D molecular graphs and ECFP fingerprints via RDKit."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-# Atom-type vocabulary - covers >99% of atoms in PDBbind ligands.
 ATOM_TYPES: list[str] = [
     "C",
     "N",
@@ -40,20 +29,7 @@ CHIRALITIES: list[str] = ["R", "S", "NONE"]
 
 @dataclass(frozen=True)
 class LigandGraph:
-    """A 2D molecular graph in numpy form.
-
-    Attributes
-    ----------
-    node_feats
-        ``(n_atoms, n_atom_features)`` float32 array.
-    edge_index
-        ``(2, n_edges)`` int64 array, **undirected** - each chemical bond
-        appears twice (once as ``(i, j)``, once as ``(j, i)``).
-    edge_feats
-        ``(n_edges, n_bond_features)`` float32 array, aligned with ``edge_index``.
-    smiles
-        Canonical SMILES of the molecule (for traceability and de-duplication).
-    """
+    """Undirected 2D molecular graph (numpy arrays, framework-agnostic)."""
 
     node_feats: np.ndarray
     edge_index: np.ndarray
@@ -70,10 +46,7 @@ class LigandGraph:
 
 
 def feature_dims() -> dict[str, int]:
-    """Return the fixed dimensionality of node and edge feature vectors.
-
-    Useful to build the GNN model without first instantiating a real ligand.
-    """
+    """Fixed node/edge feature dimensions (for building the model without data)."""
     n_atom = (
         len(ATOM_TYPES)
         + len(DEGREES)
@@ -89,11 +62,6 @@ def feature_dims() -> dict[str, int]:
 
 
 def _onehot(value: object, vocab: list) -> list[float]:
-    """One-hot encode ``value`` against ``vocab``.
-
-    If ``value`` is not in the vocabulary, the **last** bucket (assumed to be
-    a generic OTHER / out-of-vocab catch-all) is set to 1.
-    """
     if value not in vocab:
         value = vocab[-1]
     return [1.0 if v == value else 0.0 for v in vocab]
@@ -146,7 +114,6 @@ def _bond_features(bond) -> np.ndarray:
 
 
 def ligand_graph_from_mol(mol) -> LigandGraph:
-    """Build a :class:`LigandGraph` from an RDKit ``Mol`` object."""
     from rdkit import Chem
 
     if mol is None:
@@ -163,7 +130,6 @@ def ligand_graph_from_mol(mol) -> LigandGraph:
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
         bf = _bond_features(bond)
-        # Undirected: emit both directions so message passing is symmetric.
         src.append(i)
         dst.append(j)
         edge_feats_list.append(bf)
@@ -175,7 +141,6 @@ def ligand_graph_from_mol(mol) -> LigandGraph:
         edge_index = np.asarray([src, dst], dtype=np.int64)
         edge_feats = np.stack(edge_feats_list)
     else:
-        # Single-atom edge case (e.g. methane, water).
         n_bond_feats = feature_dims()["edge"]
         edge_index = np.empty((2, 0), dtype=np.int64)
         edge_feats = np.empty((0, n_bond_feats), dtype=np.float32)
@@ -198,7 +163,6 @@ def ligand_graph_from_smiles(smiles: str) -> LigandGraph:
 
 
 def ligand_graph_from_sdf(sdf_path: Path | str, sanitize: bool = True) -> LigandGraph:
-    """Load a single-molecule SDF (as PDBbind ligand files are) into a graph."""
     from rdkit import Chem
 
     sdf_path = Path(sdf_path)
@@ -216,11 +180,6 @@ def ecfp_fingerprint(
     radius: int = 2,
     n_bits: int = 2048,
 ) -> np.ndarray:
-    """Compute the ECFP4 fingerprint as a uint8 bit-vector of length ``n_bits``.
-
-    ``radius=2`` corresponds to ECFP4 (the canonical baseline featurisation;
-    "4" because radius=2 covers diameter-4 substructures).
-    """
     from rdkit import Chem
     from rdkit.Chem import rdFingerprintGenerator
     from rdkit.DataStructs import ConvertToNumpyArray
@@ -246,13 +205,6 @@ def ecfp_from_sdf(
     radius: int = 2,
     n_bits: int = 2048,
 ) -> np.ndarray:
-    """Load a single-molecule SDF and return its ECFP4 fingerprint.
-
-    Tries strict sanitisation first; falls back to ``sanitize=False`` if that
-    fails, so PDBbind ligands with non-standard valences still produce a
-    fingerprint (the Morgan generator just walks the bond graph and tolerates
-    that).
-    """
     from rdkit import Chem
 
     sdf_path = Path(sdf_path)

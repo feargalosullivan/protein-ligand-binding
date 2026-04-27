@@ -1,12 +1,4 @@
-"""ESM-2 embedding wrapper.
-
-The model itself is loaded lazily on first call so importing this module is
-cheap (helpful for unit-testing the helpers without downloading 150 MB of
-weights).
-
-Pooling helpers are deliberately decoupled from the model wrapper - they
-accept plain numpy arrays + position lists, so they're easy to test.
-"""
+"""ESM-2 embedding extraction and pocket pooling."""
 
 from __future__ import annotations
 
@@ -30,7 +22,6 @@ ESM_LAST_LAYER: dict[str, int] = {
 
 
 def embed_dim_for(model_name: str) -> int:
-    """Per-residue embedding dimension for a given ESM-2 model."""
     if model_name not in ESM_EMBED_DIMS:
         raise KeyError(f"unknown ESM-2 model: {model_name!r}")
     return ESM_EMBED_DIMS[model_name]
@@ -38,13 +29,7 @@ def embed_dim_for(model_name: str) -> int:
 
 @dataclass
 class ESMEmbedder:
-    """Lazy wrapper around a fair-esm pre-trained model.
-
-    Use as::
-
-        embedder = ESMEmbedder(model_name="esm2_t12_35M_UR50D", device="cuda")
-        per_residue = embedder.embed_chain("MKTAYIAKQRQISFVKSHFSRQLEERLG...")
-    """
+    """Lazily-loaded ESM-2 model that produces per-residue embeddings."""
 
     model_name: str = DEFAULT_MODEL
     device: str = "cpu"
@@ -77,12 +62,6 @@ class ESMEmbedder:
         self._batch_converter = alphabet.get_batch_converter()
 
     def embed_chain(self, sequence: str) -> np.ndarray:
-        """Per-residue embeddings for a single chain.
-
-        Returns array of shape ``(len(sequence), embed_dim)``. Sequences longer
-        than ``max_window`` are split into overlapping windows; the per-residue
-        embeddings are averaged where windows overlap.
-        """
         if not sequence:
             return np.zeros((0, self.embed_dim), dtype=np.float32)
 
@@ -91,8 +70,6 @@ class ESMEmbedder:
         if len(sequence) <= self.max_window:
             return self._embed_window(sequence)
 
-        # Long chain: stride is half the window so every position is seen by at
-        # least one window (and most positions by two, which we then average).
         stride = max(1, self.max_window // 2)
         out = np.zeros((len(sequence), self.embed_dim), dtype=np.float32)
         counts = np.zeros(len(sequence), dtype=np.int32)
@@ -122,7 +99,6 @@ class ESMEmbedder:
                 repr_layers=[self.effective_layer],
                 return_contacts=False,
             )
-        # ESM tokenises as [BOS] + sequence + [EOS]; drop the special tokens.
         rep = results["representations"][self.effective_layer][0, 1 : 1 + len(sequence)]
         return rep.detach().cpu().float().numpy()
 
@@ -132,24 +108,7 @@ def pool_pocket_embedding(
     pocket_positions: dict[str, list[int]],
     embed_dim: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Mean-pool embeddings over (a) pocket residues and (b) the whole protein.
-
-    Parameters
-    ----------
-    chain_embeddings
-        ``chain_id -> (L, D)`` per-residue embeddings.
-    pocket_positions
-        ``chain_id -> list of 0-indexed positions`` to include in the pocket
-        pool. May be empty for some chains.
-    embed_dim
-        Embedding dimension; used to seed zero outputs when inputs are empty.
-
-    Returns
-    -------
-    ``(pocket_pool, whole_pool)``, each shape ``(embed_dim,)``. If no pocket
-    residues are flagged on any chain, ``pocket_pool`` falls back to
-    ``whole_pool`` (so the downstream model never sees an all-zero vector).
-    """
+    """Mean-pool over pocket residues and whole protein. Returns (pocket, whole)."""
     pocket_chunks: list[np.ndarray] = []
     whole_chunks: list[np.ndarray] = []
     for cid, emb in chain_embeddings.items():

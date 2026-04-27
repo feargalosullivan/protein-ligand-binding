@@ -1,19 +1,10 @@
-"""Pocket residue identification: which residues are within R angstrom of the ligand.
-
-The expensive heavy lifting (parsing PDB, building atom arrays) goes through
-Biopython. The actual distance calculation is a pure-numpy function so we can
-unit-test it without any structural files.
-"""
-
-from __future__ import annotations
+"""Pocket extraction: find residues within a distance cutoff of the ligand."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-# Three-letter -> one-letter residue mapping. Includes a few common modified
-# residues that appear in PDBbind cleaned structures (selenomethionine, etc.).
 THREE_TO_ONE: dict[str, str] = {
     "ALA": "A",
     "ARG": "R",
@@ -35,7 +26,6 @@ THREE_TO_ONE: dict[str, str] = {
     "TRP": "W",
     "TYR": "Y",
     "VAL": "V",
-    # Common modified / protonated forms folded back to canonical residues.
     "MSE": "M",
     "SEC": "U",
     "PYL": "O",
@@ -49,23 +39,6 @@ THREE_TO_ONE: dict[str, str] = {
 
 @dataclass(frozen=True)
 class Pocket:
-    """A protein binding pocket extracted from a PDBbind complex.
-
-    Attributes
-    ----------
-    chains
-        ``chain_id -> one-letter amino-acid sequence`` for every chain that
-        contains at least one standard residue.
-    pocket_residues
-        ``chain_id -> list of 0-indexed positions in the chain's sequence``
-        identifying which residues are within ``cutoff_angstrom`` of any heavy
-        atom of the ligand.
-    pdb_ids
-        ``chain_id -> [(resseq, icode), ...]`` parallel to ``chains``, for
-        traceability back to the original PDB numbering.
-    cutoff_angstrom
-        The cutoff used to define the pocket.
-    """
 
     chains: dict[str, str]
     pocket_residues: dict[str, list[int]]
@@ -91,34 +64,11 @@ def _pocket_residue_mask(
     ligand_coords: np.ndarray,
     cutoff: float,
 ) -> np.ndarray:
-    """Return a boolean mask over residues marking those near the ligand.
-
-    Pure-numpy core function so the geometry can be tested without any PDB I/O.
-
-    Parameters
-    ----------
-    protein_atom_coords
-        ``(n_atoms, 3)`` float array of heavy-atom xyz coordinates.
-    protein_atom_residue_idx
-        ``(n_atoms,)`` integer array assigning each atom to a residue index in
-        ``[0, n_residues)``. Indices must be contiguous starting at 0.
-    ligand_coords
-        ``(n_lig_atoms, 3)`` float array of ligand heavy-atom coordinates.
-    cutoff
-        Distance cutoff in angstroms.
-
-    Returns
-    -------
-    Boolean mask of shape ``(n_residues,)`` where ``True`` means the residue
-    has at least one heavy atom within ``cutoff`` of any ligand heavy atom.
-    """
     if protein_atom_coords.size == 0 or ligand_coords.size == 0:
         return np.zeros(0, dtype=bool)
     if cutoff <= 0:
         raise ValueError(f"cutoff must be positive; got {cutoff}")
 
-    # Pairwise distances. For typical sizes (~3000 protein atoms x ~50 ligand
-    # atoms) this is ~150k floats; fine. For huge systems consider scipy KDTree.
     diffs = protein_atom_coords[:, None, :] - ligand_coords[None, :, :]
     min_dists_sq = (diffs * diffs).sum(axis=-1).min(axis=1)
     near_atoms = min_dists_sq <= cutoff * cutoff
@@ -134,11 +84,6 @@ def pocket_from_pdb_files(
     ligand_sdf: Path | str,
     cutoff_angstrom: float = 6.0,
 ) -> Pocket:
-    """Identify pocket residues using Biopython for the protein + RDKit for the ligand.
-
-    Heavy atoms only (hydrogens are ignored). Non-standard residues, waters,
-    and HETATM lines are excluded from the protein sequence.
-    """
     from Bio.PDB import PDBParser
     from rdkit import Chem
 
@@ -148,7 +93,6 @@ def pocket_from_pdb_files(
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("protein", str(protein_pdb))
 
-    # We only consider model 0 (PDBbind cleaned files have a single model).
     model = next(iter(structure))
 
     chain_residues: dict[str, list[tuple[int, str, str, np.ndarray]]] = {}
@@ -172,7 +116,6 @@ def pocket_from_pdb_files(
     if not chain_residues:
         raise ValueError(f"no standard residues found in {protein_pdb}")
 
-    # Parse the ligand and pull out its heavy-atom coordinates.
     suppl = Chem.SDMolSupplier(str(ligand_sdf), sanitize=False, removeHs=True)
     ligand_mol = next((m for m in suppl if m is not None), None)
     if ligand_mol is None:

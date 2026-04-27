@@ -1,23 +1,4 @@
-"""Parse the PDBbind v2020 index and the CASF-2016 core-set list.
-
-PDBbind ships a plain-text index file at
-``refined-set/index/INDEX_refined_data.2020`` whose format is::
-
-    # ==============================================================================
-    # List of the protein-ligand complexes in the PDBbind refined set v.2020
-    # 5316 protein-ligand complexes in total, sorted by their release year.
-    # Latest update: July 2021
-    # PDB code, resolution, release year, -logKd/Ki, Kd/Ki, reference, ligand name
-    # ==============================================================================
-    1a1e  2.80  1995   2.00  Ki=10mM      // 1a1e.pdf (PUR)
-    ...
-
-CASF-2016 ships its core set list at
-``CASF-2016/power_scoring/CoreSet.dat`` (also whitespace-separated with a
-``#`` header). We only need the PDB codes from each.
-"""
-
-from __future__ import annotations
+"""PDBbind v2020 index parser and CASF-2016 core-set loader."""
 
 import re
 from dataclasses import dataclass
@@ -28,7 +9,6 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class PDBbindEntry:
-    """A single row of the PDBbind refined-set index."""
 
     pdb_id: str
     resolution: float | None
@@ -44,17 +24,10 @@ _AFFINITY_RE = re.compile(
 
 
 def _parse_index_line(line: str) -> PDBbindEntry | None:
-    """Parse one non-comment line of an INDEX_*_data.2020 file.
-
-    Returns ``None`` if the line is empty or a comment.
-    """
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
         return None
 
-    # Drop everything after the "//" reference separator: that field can
-    # contain spaces (ligand name in parentheses) which makes naive splitting
-    # fragile.
     payload, _, tail = stripped.partition("//")
     parts = payload.split()
     if len(parts) < 5:
@@ -86,19 +59,6 @@ def _parse_index_line(line: str) -> PDBbindEntry | None:
 
 
 def load_refined_index(index_path: Path) -> pd.DataFrame:
-    """Load the PDBbind v2020 refined-set index file as a DataFrame.
-
-    Parameters
-    ----------
-    index_path
-        Path to ``INDEX_refined_data.2020`` (or any sibling file in the same
-        format, e.g. the general set).
-
-    Returns
-    -------
-    DataFrame with columns ``pdb_id``, ``resolution``, ``release_year``,
-    ``pK``, ``affinity_raw``, ``ligand_name``. Sorted by ``pdb_id``.
-    """
     index_path = Path(index_path)
     if not index_path.is_file():
         raise FileNotFoundError(
@@ -121,19 +81,6 @@ def load_refined_index(index_path: Path) -> pd.DataFrame:
 
 
 def load_casf2016_coreset_ids(coreset_path: Path) -> list[str]:
-    """Load the list of CASF-2016 core-set PDB IDs.
-
-    Parameters
-    ----------
-    coreset_path
-        Path to ``CoreSet.dat`` from the CASF-2016 distribution. The file is
-        whitespace-separated with the PDB code in the first column and a
-        ``#``-prefixed header.
-
-    Returns
-    -------
-    Sorted list of unique lower-case PDB IDs (typically 285 entries).
-    """
     coreset_path = Path(coreset_path)
     if not coreset_path.is_file():
         raise FileNotFoundError(
@@ -158,10 +105,6 @@ def load_casf2016_coreset_ids(coreset_path: Path) -> list[str]:
 
 
 def find_default_paths(data_root: Path) -> dict[str, Path]:
-    """Return the canonical sub-paths within ``data_root`` for PDBbind data.
-
-    These are the locations populated by ``scripts/download_pdbbind.py``.
-    """
     data_root = Path(data_root)
     return {
         "refined_root": data_root / "raw" / "PDBbind_v2020_refined" / "refined-set",
